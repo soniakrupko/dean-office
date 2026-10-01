@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="uk" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Деканат</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+        }
+
+        h1 {
+            margin-bottom: 30px;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 600px;
+            margin-bottom: 30px;
+        }
+
+        th, td {
+            border: 1px solid black;
+            padding: 8px;
+        }
+
+        th {
+            background-color: #eeeeee;
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>Інформаційна система деканату</h1>
+<div th:if="${students.size() > 0}">
+    <p>У системі зареєстровані студенти.</p>
+</div>
+
+<div th:unless="${students.size() > 0}">
+    <p>У системі немає зареєстрованих студентів.</p>
+</div>
+
+<h2>Групи</h2>
+
+<table>
+    <tr>
+        <th>ID</th>
+        <th>Назва групи</th>
+		<th>Курс</th>
+    </tr>
+
+	<tr th:each="group : ${groups}">
+	    <td th:text="${group.id}"></td>
+	    <td th:text="${group.name}"></td>
+
+	    <td th:switch="${group.name}">
+	        <span th:case="'ІК-21'">2 курс</span>
+	        <span th:case="'ІК-22'">2 курс</span>
+	        <span th:case="'ІК-23'">2 курс</span>
+	        <span th:case="*">Інший курс</span>
+	    </td>
+	</tr>
+</table>
+
+<h2>Студенти</h2>
+
+<table>
+    <tr>
+        <th>ID</th>
+        <th>Прізвище</th>
+        <th>Ім'я</th>
+        <th>Група</th>
+    </tr>
+
+    <tr th:each="student : ${students}">
+        <td th:text="${student.id}"></td>
+        <td th:text="${student.surname}"></td>
+        <td th:text="${student.name}"></td>
+        <td th:text="${student.groupName}"></td>
+    </tr>
+</table>
+
+</body>
+
+</html>
