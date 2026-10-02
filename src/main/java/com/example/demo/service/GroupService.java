@@ -1,37 +1,26 @@
 package com.example.demo.service;
 
-import com.example.demo.model.Group;
-import com.example.demo.repository.GroupRepository;
-import org.springframework.stereotype.Service;
-
 import java.util.List;
 
-@Service
-public class GroupService {
+import com.example.demo.model.Group;
+import com.example.demo.model.GroupWithStudentsRequest;
+import com.example.demo.model.Student;
+import com.example.demo.model.TransferResult;
 
-    private GroupRepository groupRepository;
+public interface GroupService {
+    List<Group> getAllGroups();
+    Group get(long id);
+    List<Student> students(long groupId);
+    Group create(Group group);
+    Group update(long id, Group group);
+    void delete(long id);
 
-    public GroupService() {
-    }
+    /** Транзакційно переводить усіх студентів з однієї групи в іншу. */
+    TransferResult transferStudents(long fromGroupId, long toGroupId);
 
-    public List<Group> getAllGroups() {
-        return groupRepository.findAll();
-    }
+    /** Транзакційно створює групу зі студентами (усе або нічого). */
+    Group createWithStudents(GroupWithStudentsRequest request);
 
-    public void addGroup(Group group) {
-        groupRepository.add(group);
-    }
-
-    public void deleteGroup(Long id) {
-        groupRepository.delete(id);
-    }
-
-    public List<Group> searchByName(String name) {
-        return groupRepository.findByName(name);
-    }
-
-    @org.springframework.beans.factory.annotation.Autowired
-    public void setGroupRepository(GroupRepository groupRepository) {
-        this.groupRepository = groupRepository;
-    }
+    /** Те саме, але БЕЗ транзакції — для порівняння поведінки при помилці. */
+    Group createWithStudentsNoTx(GroupWithStudentsRequest request);
 }
