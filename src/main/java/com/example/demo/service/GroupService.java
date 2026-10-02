@@ -9,7 +9,9 @@ import com.example.demo.model.TransferResult;
 
 public interface GroupService {
     List<Group> getAllGroups();
+    List<Group> withFreeSeats();
     Group get(long id);
+    Group getByName(String name);
     List<Student> students(long groupId);
     Group create(Group group);
     Group update(long id, Group group);

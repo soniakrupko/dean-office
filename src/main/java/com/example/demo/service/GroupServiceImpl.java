@@ -5,70 +5,89 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.demo.entity.GroupEntity;
+import com.example.demo.entity.StudentEntity;
 import com.example.demo.exception.BusinessException;
+import com.example.demo.exception.ConflictException;
 import com.example.demo.exception.NotFoundException;
+import com.example.demo.mapper.EntityMapper;
 import com.example.demo.model.Group;
 import com.example.demo.model.GroupWithStudentsRequest;
 import com.example.demo.model.Student;
 import com.example.demo.model.TransferResult;
-import com.example.demo.repository.GroupDao;
-import com.example.demo.repository.StudentDao;
+import com.example.demo.repository.GroupRepository;
+import com.example.demo.repository.StudentRepository;
 
 @Service
 public class GroupServiceImpl implements GroupService {
 
     private static final int DEFAULT_CAPACITY = 30;
 
-    private final GroupDao groupDao;
-    private final StudentDao studentDao;
+    private final GroupRepository groupRepository;
+    private final StudentRepository studentRepository;
 
-    public GroupServiceImpl(GroupDao groupDao, StudentDao studentDao) {
-        this.groupDao = groupDao;
-        this.studentDao = studentDao;
+    public GroupServiceImpl(GroupRepository groupRepository, StudentRepository studentRepository) {
+        this.groupRepository = groupRepository;
+        this.studentRepository = studentRepository;
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<Group> getAllGroups() {
-        return groupDao.findAll();
+        return groupRepository.findAllByOrderByIdAsc().stream().map(EntityMapper::toDto).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Group> withFreeSeats() {
+        return groupRepository.findWithFreeSeats().stream().map(EntityMapper::toDto).toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public Group get(long id) {
-        return groupDao.findById(id)
-                .orElseThrow(() -> new NotFoundException("Групу з id=" + id + " не знайдено"));
+        return EntityMapper.toDto(find(id));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Group getByName(String name) {
+        return groupRepository.findByNameIgnoreCase(name)
+                .map(EntityMapper::toDto)
+                .orElseThrow(() -> new NotFoundException("Групу '" + name + "' не знайдено"));
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<Student> students(long groupId) {
-        get(groupId);
-        return studentDao.findByGroupId(groupId);
+        find(groupId);
+        return studentRepository.findByGroupIdOrdered(groupId).stream().map(EntityMapper::toDto).toList();
     }
 
     @Override
     @Transactional
     public Group create(Group g) {
-        long id = groupDao.create(requireName(g.getName()), capacityOf(g.getCapacity()));
-        return get(id);
+        GroupEntity saved = groupRepository.save(new GroupEntity(requireName(g.getName()), capacityOf(g.getCapacity())));
+        return EntityMapper.toDto(saved);
     }
 
     @Override
     @Transactional
     public Group update(long id, Group g) {
-        if (!groupDao.update(id, requireName(g.getName()), capacityOf(g.getCapacity()))) {
-            throw new NotFoundException("Групу з id=" + id + " не знайдено");
-        }
-        return get(id);
+        GroupEntity entity = find(id);
+        entity.setName(requireName(g.getName()));
+        entity.setCapacity(capacityOf(g.getCapacity()));
+        return EntityMapper.toDto(groupRepository.save(entity));
     }
 
     @Override
     @Transactional
     public void delete(long id) {
-        if (!groupDao.delete(id)) {
-            throw new NotFoundException("Групу з id=" + id + " не знайдено");
+        find(id);
+        if (studentRepository.existsByStudentGroupId(id)) {
+            throw new ConflictException("Групу не можна видалити: у ній є студенти");
         }
+        groupRepository.deleteById(id);
     }
 
     // ---------- транзакційні бізнес-операції ----------
@@ -79,19 +98,19 @@ public class GroupServiceImpl implements GroupService {
         if (fromGroupId == toGroupId) {
             throw new BusinessException("Вихідна і цільова групи збігаються");
         }
-        get(fromGroupId);
-        Group target = get(toGroupId);
+        GroupEntity source = find(fromGroupId);
+        GroupEntity target = find(toGroupId);
 
         // Крок 1: переносимо студентів
-        int moved = studentDao.moveAll(fromGroupId, toGroupId);
+        int moved = studentRepository.moveAll(source, target);
 
         // Крок 2: перевіряємо місткість ПІСЛЯ зміни; виняток відкотить крок 1
-        int total = studentDao.countByGroupId(toGroupId);
+        long total = studentRepository.countByStudentGroupId(target.getId());
         if (total > target.getCapacity()) {
             throw new BusinessException("Перевищено місткість групи " + target.getName()
                     + ": " + total + " > " + target.getCapacity() + ". Зміни скасовано");
         }
-        return new TransferResult(moved, total);
+        return new TransferResult(moved, (int) total);
     }
 
     @Override
@@ -102,6 +121,7 @@ public class GroupServiceImpl implements GroupService {
 
     @Override
     public Group createWithStudentsNoTx(GroupWithStudentsRequest request) {
+        // Без @Transactional кожен виклик save() виконується у власній транзакції і фіксується одразу
         return doCreateWithStudents(request);
     }
 
@@ -109,7 +129,7 @@ public class GroupServiceImpl implements GroupService {
         int capacity = capacityOf(request.capacity());
         List<Student> students = request.students() == null ? List.of() : request.students();
 
-        long groupId = groupDao.create(requireName(request.name()), capacity);
+        GroupEntity group = groupRepository.save(new GroupEntity(requireName(request.name()), capacity));
         int i = 0;
         for (Student s : students) {
             i++;
@@ -119,12 +139,17 @@ public class GroupServiceImpl implements GroupService {
             if (s.getName() == null || s.getName().isBlank()) {
                 throw new BusinessException("Студент №" + i + ": не вказано ім'я");
             }
-            studentDao.create(s.getSurname(), s.getName(), groupId);
+            studentRepository.save(new StudentEntity(s.getSurname(), s.getName(), group));
         }
         if (students.size() > capacity) {
             throw new BusinessException("Студентів більше, ніж місткість групи");
         }
-        return groupDao.findById(groupId).orElseThrow();
+        return EntityMapper.toDto(group);
+    }
+
+    private GroupEntity find(long id) {
+        return groupRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Групу з id=" + id + " не знайдено"));
     }
 
     private static String requireName(String name) {

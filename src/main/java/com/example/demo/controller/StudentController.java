@@ -46,6 +46,30 @@ public class StudentController {
         return ResponseEntity.ok(service.search(group, surname, page, size));
     }
 
+    @Operation(summary = "Пошук студентів за частиною прізвища",
+            description = "Повертає студентів, прізвище яких містить заданий фрагмент (без урахування регістру), "
+                    + "відсортованих за прізвищем. Реалізовано JPQL-запитом з анотацією @Query.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Список знайдених студентів (може бути порожнім)",
+                    content = @Content(array = @ArraySchema(schema = @Schema(implementation = Student.class)))),
+            @ApiResponse(responseCode = "400", description = "Параметр part не вказано", content = @Content)
+    })
+    @GetMapping("/search")
+    public ResponseEntity<List<Student>> searchBySurnamePart(
+            @Parameter(description = "Частина прізвища", example = "ко") @RequestParam String part) {
+        return ResponseEntity.ok(service.searchBySurnamePart(part));
+    }
+
+    @Operation(summary = "Перші три студенти за алфавітом прізвищ",
+            description = "Повертає не більше трьох студентів, відсортованих за прізвищем. "
+                    + "Реалізовано методом пошуку, згенерованим Spring Data за назвою (findTop3ByOrderBySurnameAsc).")
+    @ApiResponse(responseCode = "200", description = "Список із трьох студентів",
+            content = @Content(array = @ArraySchema(schema = @Schema(implementation = Student.class))))
+    @GetMapping("/first-three")
+    public ResponseEntity<List<Student>> firstThree() {
+        return ResponseEntity.ok(service.firstThreeBySurname());
+    }
+
     @Operation(summary = "Отримати студента за ID",
             description = "Повертає інформацію про конкретного студента за його унікальним ідентифікатором.")
     @ApiResponses({

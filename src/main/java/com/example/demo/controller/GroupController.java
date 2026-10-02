@@ -40,6 +40,30 @@ public class GroupController {
         return ResponseEntity.ok(service.getAllGroups());
     }
 
+    @Operation(summary = "Групи з вільними місцями",
+            description = "Повертає групи, у яких кількість студентів менша за місткість. "
+                    + "Реалізовано іменованим JPQL-запитом (@NamedQuery GroupEntity.findWithFreeSeats).")
+    @ApiResponse(responseCode = "200", description = "Список груп із вільними місцями (може бути порожнім)",
+            content = @Content(array = @ArraySchema(schema = @Schema(implementation = Group.class))))
+    @GetMapping("/with-free-seats")
+    public ResponseEntity<List<Group>> withFreeSeats() {
+        return ResponseEntity.ok(service.withFreeSeats());
+    }
+
+    @Operation(summary = "Знайти групу за назвою",
+            description = "Повертає групу за назвою без урахування регістру. "
+                    + "Реалізовано методом пошуку, згенерованим Spring Data за назвою (findByNameIgnoreCase).")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Групу знайдено",
+                    content = @Content(schema = @Schema(implementation = Group.class))),
+            @ApiResponse(responseCode = "404", description = "Групу не знайдено", content = @Content)
+    })
+    @GetMapping("/by-name/{name}")
+    public ResponseEntity<Group> getByName(
+            @Parameter(description = "Назва групи", example = "ІК-21") @PathVariable String name) {
+        return ResponseEntity.ok(service.getByName(name));
+    }
+
     @Operation(summary = "Отримати групу за ID", description = "Повертає групу разом з її місткістю.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Групу знайдено",
